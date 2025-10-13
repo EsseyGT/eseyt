@@ -1,0 +1,58 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Firewall Rule Manager - Demo</title>
+  <style>
+    body{font-family:system-ui,Roboto,Arial;margin:20px}
+    label{display:block;margin-top:8px}
+    input,select{padding:7px;margin-top:4px}
+    table{border-collapse:collapse;width:100%;margin-top:12px}
+    th,td{border:1px solid #ddd;padding:8px}
+  </style>
+</head>
+<body>
+  <h1>Firewall Rule Manager (Demo)</h1>
+  <p>Authenticate with <code>admin/password</code> or values in <code>FWM_USER</code>/<code>FWM_PASS</code>.</p>
+
+  <button id="refresh">Refresh rules</button>
+  <pre id="raw"></pre>
+
+  <h2>Add rule</h2>
+  <form id="addForm">
+    <label>Chain <select name="chain"><option>INPUT</option><option>OUTPUT</option><option>FORWARD</option></select></label>
+    <label>Protocol <input name="proto" placeholder="tcp|udp|icmp|all" value="tcp"></label>
+    <label>Source IP/CIDR <input name="src" placeholder="1.2.3.4/32"></label>
+    <label>Dest IP/CIDR <input name="dst"></label>
+    <label>Dest port <input name="dport" type="number"></label>
+    <label>Target <select name="jump"><option>ACCEPT</option><option>DROP</option><option>REJECT</option></select></label>
+    <label>Rollback (seconds) <input name="rollbackDelay" type="number" value="60"></label>
+    <button type="submit">Preview & Apply</button>
+  </form>
+
+  <script>
+    async function fetchRules(){
+      const res = await fetch('/api/rules',{credentials:'include'});
+      const j = await res.json();
+      document.getElementById('raw').textContent = j.parsed.raw;
+    }
+    document.getElementById('refresh').addEventListener('click', fetchRules);
+    document.getElementById('addForm').addEventListener('submit', async e=>{
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const body = {};
+      for(const [k,v] of fd.entries()) if(v) body[k]=v;
+      const preview = await fetch('/api/rules/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const pj = await preview.json();
+      if(!pj.ok){alert('Preview error: '+pj.error);return;}
+      if(!confirm('About to run:\\n'+pj.cmd+'\\n\\nOK?'))return;
+      const apply = await fetch('/api/rules',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const aj = await apply.json();
+      if(!aj.ok) alert('Error: '+aj.error); else alert('Applied OK');
+      fetchRules();
+    });
+    fetchRules();
+  </script>
+</body>
+</html>
